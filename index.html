@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Gameboy</title>
+    <style>
+      canvas {
+        border: 0px solid blue;
+      }
+    </style>
+    <script src="gameboy/mbc/mbc1.js"></script>
+    <script src="gameboy/cpu.js"></script>
+    <script src="gameboy/mmu.js"></script>
+    <script src="gameboy/gpu.js"></script>
+    <script src="gameboy/joypad.js"></script>
+    <script src="gameboy/timer.js"></script>
+    <script src="gameboy/gameboy.js"></script>
+    <script src="programs.js"></script>
+    <link rel="stylesheet" href="bootstrap/css/bootstrap.min.css" />
+
+    <script src="pixi/pixi.min.js"></script>
+  </head>
+
+  <ul class="nav nav-tabs" role="tablist">
+    <li class="nav-item">
+      <a class="nav-link active" role="tab" data-toggle="tab" href="#screen"
+        >Screen</a
+      >
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" role="tab" data-toggle="tab" href="#background"
+        >Background</a
+      >
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" role="tab" data-toggle="tab" href="#tiles">Tiles</a>
+    </li>
+  </ul>
+  <div class="tab-content">
+    <div
+      style="padding:15px"
+      class="tab-pane show active"
+      role="tabpanel"
+      id="screen"
+    ></div>
+    <div
+      style="padding:15px"
+      class="tab-pane"
+      role="tabpanel"
+      id="background"
+    ></div>
+    <div style="padding:15px" class="tab-pane" role="tabpanel" id="tiles"></div>
+  </div>
+
+  <body>
+    <textarea id="log" cols="120" rows="5" readonly="readonly"></textarea></br>
+    <input type="file" id="input-program" /></br>
+    <input type="button" value="Reset" onclick="gameboy.reset();"/>
+    <div id="error" style="color: red;font-size: 20px;"></div>
+
+    <script>
+      var screenElem = document.getElementById("screen");
+      var backgroundElem = document.getElementById("background");
+      var tilesElem = document.getElementById("tiles");
+      var logElem = document.getElementById("log");
+      var errorElem = document.getElementById("error");
+
+      let type = "WebGL";
+      if (!PIXI.utils.isWebGLSupported()) {
+        type = "canvas";
+      }
+
+      var gameboy = new Gameboy();
+      gameboy.cpu.mmu.set_target(logElem);
+      //Create a Pixi Application
+      var scale = 3;
+
+      // Main Screen
+      let screenApp = new PIXI.Application({
+        width: 160 * scale,
+        height: 144 * scale
+      });
+      let screenAppTexture = PIXI.Texture.fromBuffer(
+        gameboy.gpu.screen,
+        160,
+        144
+      );
+      const screenAppSprite = new PIXI.Sprite(screenAppTexture);
+
+      screenAppSprite.scale.set(scale, scale);
+      screenApp.stage.addChild(screenAppSprite);
+      screenApp.ticker.add(deltaTime => gameLoop(deltaTime));
+      screenElem.appendChild(screenApp.view);
+
+      // Background
+      let backgroundApp = new PIXI.Application({
+        width: 256 * scale,
+        height: 256 * scale
+      });
+      let backgroundAppTexture = PIXI.Texture.fromBuffer(
+        gameboy.gpu.background_pixels,
+        256,
+        256
+      );
+      const backgroundAppSprite = new PIXI.Sprite(backgroundAppTexture);
+
+      backgroundAppSprite.scale.set(scale, scale);
+      backgroundApp.stage.addChild(backgroundAppSprite);
+
+      backgroundElem.appendChild(backgroundApp.view);
+
+      // Tileset
+      let tilesetApp = new PIXI.Application({
+        width: 128 * scale,
+        height: 192 * scale
+      });
+      let tilesetAppTexture = PIXI.Texture.fromBuffer(
+        gameboy.gpu.tile_pixels,
+        128,
+        192
+      );
+      const tilesetAppSprite = new PIXI.Sprite(tilesetAppTexture);
+
+      tilesetAppSprite.scale.set(scale, scale);
+      tilesetApp.stage.addChild(tilesetAppSprite);
+
+      tilesElem.appendChild(tilesetApp.view);
+
+      //gameboy.mmu.loadBios(toByteArray(atob(b)));
+      gameboy.reset();
+      gameboy.mmu.loadProgram(toByteArray(atob(game)));
+      document.title = gameboy.mmu.getTitle();
+
+      //cpuWorker.postMessage({'order':'load_program', 'program': toByteArray(atob(space_invaders))});
+
+      function toByteArray(data) {
+        var bytes = new Uint8Array(data.length);
+        for (var i = 0; i < data.length; i++) {
+          bytes[i] = data.charCodeAt(i);
+        }
+
+        return bytes;
+      }
+
+      function gameLoop(delta) {
+        gameboy.update();
+        backgroundAppTexture.update();
+        tilesetAppTexture.update();
+        screenAppTexture.update();
+      }
+      var inputProgram = document.getElementById("input-program");
+      inputProgram.addEventListener("change", function() {
+        var reader = new FileReader();
+        reader.readAsArrayBuffer(this["files"][0]);
+        reader.onload = function() {
+          try {
+          gameboy.stop=true;
+          
+          gameboy.reset();
+          gameboy.mmu.loadProgram(new Uint8Array(reader.result));
+          document.title = gameboy.mmu.getTitle();
+          gameboy.stop=false;
+          gameboy.cpu.halt=false;
+          error.innerHTML = "";
+          inputProgram.blur();
+        } catch(error) {
+            errorElem.innerHTML = error;
+          }
+        };
+      });
+
+      document.addEventListener("keydown", e => {
+        gameboy.joypad.keydown(e);
+      });
+
+      document.addEventListener("keyup", e => {
+        gameboy.joypad.keyup(e);
+      });
+    </script>
+
+    <script src="bootstrap/js/jquery-3.2.1.slim.min.js"></script>
+    <script src="bootstrap/js/popper.min.js"></script>
+    <script src="bootstrap/js/bootstrap.min.js"></script>
+  </body>
+</html>
